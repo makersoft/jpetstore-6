@@ -27,14 +27,26 @@
      http://www.springframework.org/schema/tx http://www.springframework.org/schema/tx/spring-tx-3.0.xsd">
 
    <!-- in-memory database and a datasource -->
-    <jdbc:embedded-database id="dataSource">
-        <jdbc:script location="classpath:database/jpetstore-hsqldb-schema.sql"/>
-        <jdbc:script location="classpath:database/jpetstore-hsqldb-dataload.sql"/>
+    <jdbc:embedded-database id="dataSource_0">
+        <jdbc:script location="classpath:database/shard_0/jpetstore-hsqldb-schema.sql"/>
+        <jdbc:script location="classpath:database/shard_0/jpetstore-hsqldb-dataload.sql"/>
     </jdbc:embedded-database>
 
+    <jdbc:embedded-database id="dataSource_1">
+        <jdbc:script location="classpath:database/shard_1/jpetstore-hsqldb-schema.sql"/>
+        <jdbc:script location="classpath:database/shard_1/jpetstore-hsqldb-dataload.sql"/>
+    </jdbc:embedded-database>
+
+
+
     <!-- transaction manager, use JtaTransactionManager for global tx -->
-    <bean id="transactionManager" class="org.springframework.jdbc.datasource.DataSourceTransactionManager">
-        <property name="dataSource" ref="dataSource" />
+    <bean id="transactionManager" class="org.makersoft.shards.transaction.MultiDataSourcesTransactionManager">
+        <property name="dataSources">
+            <list>
+                <ref bean="dataSource_0" />
+                <ref bean="dataSource_1" />
+            </list>
+        </property>
     </bean>
 
     <!-- enable component scanning and autowire (beware that this does not enable mapper scanning!) -->    
@@ -43,9 +55,29 @@
     <!-- enable transaction demarcation with annotations -->
     <tx:annotation-driven />
 
+    <bean id="shard_0" class="org.makersoft.shards.cfg.impl.ShardConfigurationImpl">
+        <property name="shardId" value="0"/>
+        <property name="dataSource" ref="dataSource_0" />
+        <property name="mapperLocations" value="classpath:/mapper/shard_0/*Mapper.xml" />
+    </bean>
+
+    <bean id="shard_1" class="org.makersoft.shards.cfg.impl.ShardConfigurationImpl">
+        <property name="shardId" value="1"/>
+        <property name="dataSource" ref="dataSource_1" />
+        <property name="mapperLocations" value="classpath:/mapper/shard_1/*Mapper.xml" />
+    </bean>
+
     <!-- define the SqlSessionFactory -->
-    <bean id="sqlSessionFactory" class="org.mybatis.spring.SqlSessionFactoryBean">
-        <property name="dataSource" ref="dataSource" />
+    <bean id="sqlSessionFactory" class="org.makersoft.shards.spring.ShardedSqlSessionFactoryBean">
+        <property name="shardConfigurations">
+            <array>
+                <ref bean="shard_0"/>
+                <ref bean="shard_1"/>
+            </array>
+        </property>
+        <property name="shardStrategyFactory">
+            <bean class="org.makersoft.shards.strategy.internal.VerticalShardStrategyFactory" />
+        </property>
         <property name="typeAliasesPackage" value="org.mybatis.jpetstore.domain" />
     </bean>
 
